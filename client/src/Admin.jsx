@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 
 // API Base URL - derive from the host the browser used so mobile devices can reach the API
-const API_URL = (typeof window !== 'undefined' && window.location && window.location.hostname)
+const API_URL =  import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location && window.location.hostname)
     ? `${window.location.protocol}//${window.location.hostname}:8000`
     : 'http://localhost:8000';
 
