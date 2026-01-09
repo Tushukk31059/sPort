@@ -16,7 +16,7 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-  origin: ['https://sport-frontend-iox2.onrender.com/', 'http://localhost:5173'],
+  origin: ['https://sport-frontend-iox2.onrender.com', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -82,10 +82,40 @@ const uploadArt = multer({
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: fileFilter
 });
-
-app.listen(process.env.PORT || 8000, () => {
-  console.log(`Server is running on port ${process.env.PORT || 8000}`);
+// ADD HEALTH CHECK ROUTE (REQUIRED BY RENDER)
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        message: 'Server is running',
+        timestamp: new Date().toISOString(),
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
 });
+
+// ADD ROOT ROUTE FOR TESTING
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Portfolio Backend API',
+        endpoints: [
+            '/intro',
+            '/experience',
+            '/skill',
+            '/project',
+            '/art',
+            '/query',
+            '/health'
+        ],
+        frontend: 'https://sport-frontend-iox2.onrender.com'
+    });
+});
+
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Frontend URL: https://sport-frontend-iox2.onrender.com`);
+});
+
 
 // mongoose.connect("mongodb://localhost:27017/PortfolioDB")
 mongoose.connect(process.env.MONGODB_URI || "")
@@ -154,30 +184,40 @@ const QueryModel = mongoose.model("Query", querySchema, "query");
 
 // ------------------ ROUTES ------------------
 app.post("/intro", async (req, res) => {
-    const result = await new IntroModel({
-        name: req.body.name,
-        title: req.body.title,
-        location: req.body.location,
-        email: req.body.email,
-        github: req.body.github,
-        linkedin: req.body.linkedin,
-        profileImage: req.body.profileImage,
-        resumeUrl: req.body.resumeUrl,
-        bio: req.body.bio
-    });
-    const rr = await result.save();
-    if (rr) {
-        res.send({ statuscode: 1 });
-    } else {
-        res.send({ statuscode: 0 });
+    try {
+        const result = await new IntroModel({
+            name: req.body.name,
+            title: req.body.title,
+            location: req.body.location,
+            email: req.body.email,
+            github: req.body.github,
+            linkedin: req.body.linkedin,
+            profileImage: req.body.profileImage,
+            resumeUrl: req.body.resumeUrl,
+            bio: req.body.bio
+        }).save();
+        res.json({ statuscode: 1, d: result });
+    } catch (error) {
+        console.error('Error saving intro:', error);
+        res.status(500).json({ statuscode: 0, error: error.message });
     }
 });
 
 app.get('/intro', async (req, res) => {
   try {
     const doc = await IntroModel.findOne().sort({ _id: -1 }).lean();
-    if (!doc) return res.status(404).json({ error: 'No intro found' });
-    res.json(doc);
+    if (!doc) {
+        // Return empty object instead of 404
+        return res.json({ 
+            d: { 
+                name: 'Krish', 
+                title: 'Developer',
+                bio: 'No bio found',
+                email: 'example@email.com'
+            }
+        });
+    }
+    res.json({ d: doc });
   } catch (err) {
     console.error('Error fetching intro:', err);
     res.status(500).json({ error: 'Failed to fetch intro' });
@@ -205,7 +245,7 @@ app.get('/experience', async (req, res) => {
     try {
         const docs = await ExperienceModel.find().lean();
         // Return in user's preferred wrapper
-        res.json({ statuscode: 1, d: docs });
+        res.json({ d: docs });
     } catch (err) {
         console.error('Error fetching experiences:', err);
         res.status(500).json({ statuscode: 0, error: 'Failed to fetch experiences' });
@@ -267,7 +307,7 @@ app.post('/skill', async (req, res) => {
 app.get('/skill', async (req, res) => {
     try {
         const docs = await SkillModel.find().lean();
-        res.json({ statuscode: 1, d: docs });
+        res.json({ d: docs });
     } catch (err) {
         console.error('Error fetching skills:', err);
         res.status(500).json({ statuscode: 0, error: 'Failed to fetch skills' });
@@ -329,7 +369,7 @@ app.post('/project', async (req, res) => {
 app.get('/project', async (req, res) => {
     try {
         const docs = await ProjectModel.find().lean();
-        res.json({ statuscode: 1, d: docs });
+         res.json({ d: docs }); 
     } catch (err) {
         console.error('Error fetching projects:', err);
         res.status(500).json({ statuscode: 0, error: 'Failed to fetch projects' });
@@ -373,98 +413,150 @@ app.delete('/project/:id', async (req, res) => {
 
 // Create a query suggestion
 app.post('/query', async (req, res) => {
-    const newQuery = new QueryModel({
-        name: req.body.name,
-        email: req.body.email,
-        query: req.body.query,
-        read: false
-    });
-    const rr = await newQuery.save();
-    res.json({ statuscode: 1, d: rr });
+    try {
+        const newQuery = new QueryModel({
+            name: req.body.name,
+            email: req.body.email,
+            query: req.body.query
+        });
+        const rr = await newQuery.save();
+        res.json({ statuscode: 1, d: rr });
+    } catch (err) {
+        console.error('Error saving query:', err);
+        res.status(500).json({ statuscode: 0, error: 'Failed to save query' });
+    }
 });
 
 // Get all queries
 app.get('/query', async (req, res) => {
-    const docs = await QueryModel.find().lean();
-    res.json({ statuscode: 1, d: docs });
+    try {
+        const docs = await QueryModel.find().lean();
+        res.json({ d:docs }); // Return array directly
+    } catch (err) {
+        console.error('Error fetching queries:', err);
+        res.status(500).json({ error: 'Failed to fetch queries' });
+    }
 });
+
 
 // Delete a query
 app.delete('/query/:id', async (req, res) => {
-    const id = req.params.id;
-    const removed = await QueryModel.findByIdAndDelete(id).lean();
-    if (!removed) return res.status(404).json({ statuscode: 0, error: 'Not found' });
-    res.json({ statuscode: 1 });
+    try {
+        const id = req.params.id;
+        const removed = await QueryModel.findByIdAndDelete(id).lean();
+        if (!removed) return res.status(404).json({ error: 'Not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting query:', err);
+        res.status(500).json({ error: 'Failed to delete query' });
+    }
 });
 
 // ==================== ART ROUTES ====================
 
 // Create an art item
 app.post('/art', async (req, res) => {
-    const newArt = new ArtModel({
-        title: req.body.title,
-        type: req.body.type,
-        image: req.body.image
-    });
-    const rr = await newArt.save();
-    res.json({ statuscode: 1, d: rr });
+    try {
+        const newArt = new ArtModel({
+            title: req.body.title,
+            type: req.body.type,
+            image: req.body.image
+        });
+        const rr = await newArt.save();
+        res.json({ statuscode: 1, d: rr });
+    } catch (err) {
+        console.error('Error saving art:', err);
+        res.status(500).json({ statuscode: 0, error: 'Failed to save art' });
+    }
 });
 
 // Get all art items
 app.get('/art', async (req, res) => {
-    const docs = await ArtModel.find().lean();
-    res.json({ statuscode: 1, d: docs });
+    try {
+        const docs = await ArtModel.find().lean();
+        res.json({ d:docs }); // Return array directly
+    } catch (err) {
+        console.error('Error fetching art:', err);
+        res.status(500).json({ error: 'Failed to fetch art' });
+    }
 });
 
 // Update an art item
 app.put('/art/:id', async (req, res) => {
-    const id = req.params.id;
-    const updates = {
-        title: req.body.title,
-        type: req.body.type,
-        image: req.body.image
-    };
-    const updated = await ArtModel.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).lean();
-    if (!updated) return res.status(404).json({ statuscode: 0, error: 'Not found' });
-    res.json({ statuscode: 1, d: updated });
+    try {
+        const id = req.params.id;
+        const updates = {
+            title: req.body.title,
+            type: req.body.type,
+            image: req.body.image
+        };
+        const updated = await ArtModel.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).lean();
+        if (!updated) return res.status(404).json({ error: 'Not found' });
+        res.json(updated);
+    } catch (err) {
+        console.error('Error updating art:', err);
+        res.status(500).json({ error: 'Failed to update art' });
+    }
 });
+
 
 // Delete an art item
 app.delete('/art/:id', async (req, res) => {
-    const id = req.params.id;
-    const removed = await ArtModel.findByIdAndDelete(id).lean();
-    if (!removed) return res.status(404).json({ statuscode: 0, error: 'Not found' });
-    res.json({ statuscode: 1 });
+    try {
+        const id = req.params.id;
+        const removed = await ArtModel.findByIdAndDelete(id).lean();
+        if (!removed) return res.status(404).json({ error: 'Not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting art:', err);
+        res.status(500).json({ error: 'Failed to delete art' });
+    }
 });
-
 // File upload route for profile photo
 app.post('/upload/profile', uploadProfile.single('profileImage'), (req, res) => {
     if (!req.file) {
-        return res.status(400).json({ statuscode: 0, error: 'No file uploaded' });
+        return res.status(400).json({ error: 'No file uploaded' });
     }
-    const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
-    const fileUrl = `${baseUrl}/uploads/profile/${req.file.filename}`;
-    res.json({ statuscode: 1, d: { url: fileUrl, filename: req.file.filename } });
+    // Use request protocol and host to construct URL
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const fileUrl = `${protocol}://${host}/uploads/profile/${req.file.filename}`;
+    res.json({ url: fileUrl, filename: req.file.filename });
 });
 
-// File upload route for art photos
+// File upload route for art photos - FIXED
 app.post('/upload/art', uploadArt.single('artImage'), (req, res) => {
     if (!req.file) {
-        return res.status(400).json({ statuscode: 0, error: 'No file uploaded' });
+        return res.status(400).json({ error: 'No file uploaded' });
     }
-    const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
-    const fileUrl = `${baseUrl}/uploads/art/${req.file.filename}`;
-    res.json({ statuscode: 1, d: { url: fileUrl, filename: req.file.filename } });
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const fileUrl = `${protocol}://${host}/uploads/art/${req.file.filename}`;
+    res.json({ url: fileUrl, filename: req.file.filename });
 });
 
 // ------------------- ADMIN AUTH ROUTE -------------------
 // Simple password check for admin panel. Set `ADMIN_PASSWORD` in env to customize.
+// ADMIN AUTH ROUTE
 app.post('/auth', (req, res) => {
-    const provided = req.body && req.body.password ? String(req.body.password) : '';
+    const provided = req.body?.password || '';
     const adminPass = process.env.ADMIN_PASSWORD || '';
     if (provided && provided === adminPass) {
         return res.json({ ok: true });
     }
-    return res.json({ ok: false });
+    return res.status(401).json({ ok: false, error: 'Invalid password' });
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+    res.status(500).json({ 
+        error: 'Internal server error',
+        message: err.message 
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+});

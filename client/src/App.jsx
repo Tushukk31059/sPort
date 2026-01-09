@@ -7,8 +7,8 @@ import {
 import AdminPanel from './Admin.jsx';
 
 // API Base URL - prefer Vite env var `VITE_API_URL`, fallback to same-host:8000 or localhost
-const API_URL = import.meta.env.VITE_API_URL || 'https://sport-eyup.onrender.com';
-
+// const API_URL = import.meta.env.VITE_API_URL || 'https://sport-eyup.onrender.com';
+const API_URL = 'https://sport-eyup.onrender.com';
 
 
 // --- 1. CORE UTILITIES, HOOKS & STYLES ---
@@ -694,23 +694,44 @@ export default function App() {
 
     // Helper to fetch and normalize server responses.
     // Server sometimes returns { statuscode: 1, d: ... } or raw documents; normalize to the inner data.
-    const fetchJson = async (endpoint, options) => {
-        try {
-            const res = await fetch(`${API_URL}${endpoint}`, options);
-            if (!res.ok) {
-                console.error(`API request failed: ${endpoint} -> ${res.status}`);
-                return null;
+// Update the fetchJson helper function in App.jsx:
+const fetchJson = async (endpoint, options) => {
+    try {
+        console.log(`Fetching from: ${API_URL}${endpoint}`);
+        const res = await fetch(`${API_URL}${endpoint}`, options);
+        console.log(`Response status for ${endpoint}:`, res.status);
+        
+        if (!res.ok) {
+            console.error(`API request failed: ${endpoint} -> ${res.status} ${res.statusText}`);
+            // Try to get error message from response
+            try {
+                const errorText = await res.text();
+                console.error('Error response:', errorText);
+            } catch (e) {
+                console.error('Could not read error response');
             }
-            const body = await res.json().catch(() => null);
-            console.log('fetchJson', endpoint, body);
-            if (!body) return null;
-            // If wrapped response with .d, return that, otherwise return body directly
-            return body.d !== undefined ? body.d : body;
-        } catch (err) {
-            console.error(`Fetch error for ${endpoint}:`, err);
             return null;
         }
-    };
+        
+        const body = await res.json().catch(async (err) => {
+            console.error(`Failed to parse JSON from ${endpoint}:`, err);
+            // Try to see what we actually got
+            const text = await res.text();
+            console.error('Raw response:', text);
+            return null;
+        });
+        
+        console.log(`Response from ${endpoint}:`, body);
+        
+        // Your backend now returns data directly, not wrapped in .d
+        // For intro endpoint, it returns object directly
+        // For arrays (experience, skill, etc.), it returns array directly
+        return body;
+    } catch (err) {
+        console.error(`Network error for ${endpoint}:`, err);
+        return null;
+    }
+};
 
     // Mock Loading
     useEffect(() => {
@@ -722,8 +743,13 @@ export default function App() {
     useEffect(() => {
         let mounted = true;
         const loadProfile = async () => {
+        console.log('Loading profile...');
             const serverData = await fetchJson('/intro');
-            if (!mounted || !serverData) return;
+              console.log('Profile data received:', serverData);
+        if (!mounted || !serverData) {
+            console.log('No profile data or component unmounted');
+            return;
+        }
             const mapped = {
                 name: serverData.name || '',
                 title: serverData.title || '',
@@ -735,6 +761,7 @@ export default function App() {
                 profileImage: serverData.profileImage || '',
                 resumeUrl: serverData.resumeUrl || '',
             };
+            console.log('Mapped profile data:', mapped);
             setPortfolioData(mapped);
         };
 
