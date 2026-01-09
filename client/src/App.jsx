@@ -7,11 +7,7 @@ import {
 import AdminPanel from './Admin.jsx';
 
 // API Base URL - prefer Vite env var `VITE_API_URL`, fallback to same-host:8000 or localhost
-const API_URL = import.meta.env.VITE_API_URL || (
-  (typeof window !== 'undefined' && window.location && window.location.hostname)
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : 'http://localhost:8000'
-);
+const API_URL = import.meta.env.VITE_API_URL || 'https://sport-eyup.onrender.com';
 
 
 
