@@ -695,50 +695,70 @@ export default function App() {
     // Helper to fetch and normalize server responses.
     // Server sometimes returns { statuscode: 1, d: ... } or raw documents; normalize to the inner data.
 // Update the fetchJson helper function in App.jsx:
+// Enhanced fetchJson function
 const fetchJson = async (endpoint, options) => {
     try {
-        console.log(`Fetching from: ${API_URL}${endpoint}`);
-        const res = await fetch(`${API_URL}${endpoint}`, options);
-        console.log(`Response status for ${endpoint}:`, res.status);
+        const url = `${API_URL}${endpoint}`;
+        console.log(`🌐 FETCHING: ${url}`);
+        
+        const res = await fetch(url, options);
+        console.log(`📡 RESPONSE STATUS for ${endpoint}:`, res.status, res.statusText);
         
         if (!res.ok) {
-            console.error(`API request failed: ${endpoint} -> ${res.status} ${res.statusText}`);
-            // Try to get error message from response
-            try {
-                const errorText = await res.text();
-                console.error('Error response:', errorText);
-            } catch (e) {
-                console.error('Could not read error response');
-            }
+            console.error(`❌ API ERROR ${endpoint}: ${res.status} ${res.statusText}`);
             return null;
         }
         
-        const body = await res.json().catch(async (err) => {
-            console.error(`Failed to parse JSON from ${endpoint}:`, err);
-            // Try to see what we actually got
-            const text = await res.text();
-            console.error('Raw response:', text);
+        const text = await res.text();
+        console.log(`📄 RAW RESPONSE from ${endpoint}:`, text);
+        
+        let body;
+        try {
+            body = JSON.parse(text);
+            console.log(`✅ PARSED JSON from ${endpoint}:`, body);
+        } catch (parseError) {
+            console.error(`❌ JSON PARSE ERROR ${endpoint}:`, parseError);
             return null;
-        });
+        }
         
-        console.log(`Response from ${endpoint}:`, body);
+        // IMPORTANT: Your API returns { d: [...] } format
+        if (body && typeof body === 'object') {
+            if ('d' in body) {
+                console.log(`📦 Unwrapping .d from ${endpoint}, got:`, body.d);
+                return body.d; // Return the array inside .d
+            }
+            // If it's already an array, return it
+            if (Array.isArray(body)) {
+                console.log(`📦 Direct array from ${endpoint}:`, body);
+                return body;
+            }
+        }
         
-        // Your backend now returns data directly, not wrapped in .d
-        // For intro endpoint, it returns object directly
-        // For arrays (experience, skill, etc.), it returns array directly
+        console.log(`📤 Returning raw body from ${endpoint}:`, body);
         return body;
     } catch (err) {
-        console.error(`Network error for ${endpoint}:`, err);
+        console.error(`❌ NETWORK ERROR ${endpoint}:`, err);
         return null;
     }
-};
+};    // Mock Loading
+    // useEffect(() => {
+    //     const timer = setTimeout(() => setIsLoading(false), 800); 
+    //     return () => clearTimeout(timer);
+    // }, []);
 
-    // Mock Loading
+
     useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 800); 
+        // We only stop loading when we have at least Profile Data OR if 5 seconds pass (timeout)
+        if (portfolioData.name) {
+            setIsLoading(false);
+        }
+        
+        // Safety timeout: If backend is sleeping, show the site anyway after 4 seconds
+        const timer = setTimeout(() => setIsLoading(false), 4000);
         return () => clearTimeout(timer);
-    }, []);
+    }, [portfolioData]);
 
+    
     // Fetch profile data (bio) from backend on mount and update portfolioData
     useEffect(() => {
         let mounted = true;
@@ -770,24 +790,62 @@ const fetchJson = async (endpoint, options) => {
     }, []);
 
     // Fetch experiences from backend on mount and populate experiences state
-    useEffect(() => {
-        const loadExperiences = async () => {
-            const experiencesList = await fetchJson('/experience');
-            if (!experiencesList) return;
-            const mapped = experiencesList.map(exp => ({ 
-                id: exp._id || exp.id || generateId(), 
-                yearRange: exp.yearRange,
-                title: exp.title,
-                institution: exp.institution,
-                location: exp.location,
-                description: exp.description
-            }));
-            setExperiences(mapped);
-        };
+    // Fetch experiences from backend on mount
+useEffect(() => {
+    console.log('🔄 useEffect: Loading experiences...');
+    
+    const loadExperiences = async () => {
+        console.log('📥 Calling fetchJson for /experience');
+        const experiencesList = await fetchJson('/experience');
+        
+        console.log('📦 fetchJson returned:', experiencesList);
+        console.log('🔍 Type:', typeof experiencesList);
+        console.log('🔍 Is array?', Array.isArray(experiencesList));
+        
+        if (!experiencesList) {
+            console.error('❌ No data returned from fetchJson');
+            // Add some test data
+            const testData = [{
+                id: 'test-1',
+                yearRange: '2023 - Present',
+                title: 'Full Stack Developer',
+                institution: 'Tech Company',
+                location: 'Remote',
+                description: 'Test experience data'
+            }];
+            console.log('📝 Setting test data:', testData);
+            setExperiences(testData);
+            return;
+        }
+        
+        if (!Array.isArray(experiencesList)) {
+            console.error('❌ experiencesList is not an array:', experiencesList);
+            return;
+        }
+        
+        console.log(`📊 Mapping ${experiencesList.length} experiences`);
+        
+        const mapped = experiencesList.map((exp, index) => {
+            console.log(`📝 Mapping experience ${index}:`, exp);
+            return {
+                id: exp._id || exp.id || generateId(),
+                yearRange: exp.yearRange || 'Not specified',
+                title: exp.title || 'Untitled',
+                institution: exp.institution || 'Unknown',
+                location: exp.location || 'Unknown',
+                description: exp.description || 'No description'
+            };
+        });
+        
+        console.log('🗺️ Mapped experiences:', mapped);
+        
+        // Set the state
+        setExperiences(mapped);
+        console.log('✅ setExperiences called with', mapped.length, 'items');
+    };
 
-        loadExperiences();
-    }, [setExperiences]);
-
+    loadExperiences();
+}, [setExperiences]); // Make sure setExperiences is in dependencies
     // Fetch skills from backend on mount and populate skills state
     useEffect(() => {
         const loadSkills = async () => {
@@ -889,7 +947,7 @@ const fetchJson = async (endpoint, options) => {
                     </ErrorBoundary>
                 </div>
             } />
-            <Route path="/adminKrish" element={
+            <Route path="/adminkrish" element={
                 <div className={`min-h-screen ${mainBg} ${mainText} p-4 md:p-8 font-sans relative`}>
                     <style>{CustomStyles()}</style>
                     
